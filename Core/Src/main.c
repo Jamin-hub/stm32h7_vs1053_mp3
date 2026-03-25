@@ -124,7 +124,6 @@ int main(void)
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   DMA_Register();
-  u4_printf("hello\n");
   lv_init(); 
   lv_port_disp_init();
   lv_port_indev_init();
