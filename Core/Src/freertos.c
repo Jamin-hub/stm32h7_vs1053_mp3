@@ -1,0 +1,464 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * File Name          : freertos.c
+  * Description        : Code for freertos applications
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+
+/* Includes ------------------------------------------------------------------*/
+#include "FreeRTOS.h"
+#include "task.h"
+#include "main.h"
+#include "FreeRTOS.h"
+#include "cmsis_os2.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include "debug_uart.h"
+#include "fatfs.h"
+#include "lwrb.h"
+
+#include "lvgl.h"
+#include "lv_demos.h"
+#include "touch.h"
+
+#include "vs1053.h"
+#include "key.h"
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+/* USER CODE BEGIN Variables */
+FATFS fs;
+uint8_t flag = 1;
+/* Music Data Buffer */
+lwrb_t MusicBuffer;
+uint8_t MusicBufferData[4096];
+
+/* USER CODE END Variables */
+/* Definitions for defaultTask */
+osThreadId_t defaultTaskHandle;
+const osThreadAttr_t defaultTask_attributes = {
+  .name = "defaultTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for FileReadTask */
+osThreadId_t FileReadTaskHandle;
+const osThreadAttr_t FileReadTask_attributes = {
+  .name = "FileReadTask",
+  .stack_size = 1024 * 4,
+  .priority = (osPriority_t) osPriorityHigh,
+};
+/* Definitions for AudioPlayTask */
+osThreadId_t AudioPlayTaskHandle;
+const osThreadAttr_t AudioPlayTask_attributes = {
+  .name = "AudioPlayTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityRealtime,
+};
+/* Definitions for GuiUpdateTask */
+osThreadId_t GuiUpdateTaskHandle;
+const osThreadAttr_t GuiUpdateTask_attributes = {
+  .name = "GuiUpdateTask",
+  .stack_size = 1024 * 4,
+  .priority = (osPriority_t) osPriorityBelowNormal,
+};
+/* Definitions for TouchTask */
+osThreadId_t TouchTaskHandle;
+const osThreadAttr_t TouchTask_attributes = {
+  .name = "TouchTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal,
+};
+/* Definitions for KeyScanTask */
+osThreadId_t KeyScanTaskHandle;
+const osThreadAttr_t KeyScanTask_attributes = {
+  .name = "KeyScanTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for SensorTask */
+osThreadId_t SensorTaskHandle;
+const osThreadAttr_t SensorTask_attributes = {
+  .name = "SensorTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow7,
+};
+/* Definitions for RtcTask */
+osThreadId_t RtcTaskHandle;
+const osThreadAttr_t RtcTask_attributes = {
+  .name = "RtcTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for touchBinarySem */
+osSemaphoreId_t touchBinarySemHandle;
+const osSemaphoreAttr_t touchBinarySem_attributes = {
+  .name = "touchBinarySem"
+};
+
+/* Private function prototypes -----------------------------------------------*/
+/* USER CODE BEGIN FunctionPrototypes */
+
+/* USER CODE END FunctionPrototypes */
+
+void StartDefaultTask(void *argument);
+void StartFileReadTask(void *argument);
+void StartAudioPlayTask(void *argument);
+void StartGuiUpdateTask(void *argument);
+void StartTouchTask(void *argument);
+void StartKeyScanTask(void *argument);
+void StartSensorTask(void *argument);
+void StartRtcTask(void *argument);
+
+void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
+
+/* Hook prototypes */
+void vApplicationTickHook(void);
+
+/* USER CODE BEGIN 3 */
+void vApplicationTickHook( void )
+{
+   /* This function will be called by each tick interrupt if
+   configUSE_TICK_HOOK is set to 1 in FreeRTOSConfig.h. User code can be
+   added here, but the tick hook is called from an interrupt context, so
+   code must not attempt to block, and only the interrupt safe FreeRTOS API
+   functions can be used (those that end in FromISR()). */
+  lv_tick_inc(1);
+}
+/* USER CODE END 3 */
+
+/**
+  * @brief  FreeRTOS initialization
+  * @param  None
+  * @retval None
+  */
+void MX_FREERTOS_Init(void) {
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* Create the semaphores(s) */
+  /* creation of touchBinarySem */
+  touchBinarySemHandle = osSemaphoreNew(1, 0, &touchBinarySem_attributes);
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of defaultTask */
+  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+
+  /* creation of FileReadTask */
+  FileReadTaskHandle = osThreadNew(StartFileReadTask, NULL, &FileReadTask_attributes);
+
+  /* creation of AudioPlayTask */
+  AudioPlayTaskHandle = osThreadNew(StartAudioPlayTask, NULL, &AudioPlayTask_attributes);
+
+  /* creation of GuiUpdateTask */
+  GuiUpdateTaskHandle = osThreadNew(StartGuiUpdateTask, NULL, &GuiUpdateTask_attributes);
+
+  /* creation of TouchTask */
+  TouchTaskHandle = osThreadNew(StartTouchTask, NULL, &TouchTask_attributes);
+
+  /* creation of KeyScanTask */
+  KeyScanTaskHandle = osThreadNew(StartKeyScanTask, NULL, &KeyScanTask_attributes);
+
+  /* creation of SensorTask */
+  SensorTaskHandle = osThreadNew(StartSensorTask, NULL, &SensorTask_attributes);
+
+  /* creation of RtcTask */
+  RtcTaskHandle = osThreadNew(StartRtcTask, NULL, &RtcTask_attributes);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+  /* USER CODE END RTOS_EVENTS */
+
+}
+
+/* USER CODE BEGIN Header_StartDefaultTask */
+/**
+  * @brief  Function implementing the defaultTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void *argument)
+{
+  /* USER CODE BEGIN StartDefaultTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartDefaultTask */
+}
+
+/* USER CODE BEGIN Header_StartFileReadTask */
+/**
+* @brief Function implementing the FileReadTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartFileReadTask */
+void StartFileReadTask(void *argument)
+{
+  /* USER CODE BEGIN StartFileReadTask */
+  FRESULT res;
+  FIL fmp3; // 文件对象
+  UINT br;
+  lwrb_sz_t write_len;
+  uint8_t sd_buf[1024];
+
+  lwrb_init(&MusicBuffer, MusicBufferData, sizeof(MusicBufferData));
+
+  res = f_mount(&fs, "0:", 1);   // 立即挂载
+  if (res != FR_OK)
+  {
+    u4_printf("sd err\n");
+    while(1);
+  }
+
+  res = f_open(&fmp3, "0:/Music/Off The Hook - Jeff Jarvis.mp3", FA_READ);
+  if (res != FR_OK)
+  {
+    u4_printf("flie err\n");
+    while(1);
+  }
+  atk_mo1053_restart_play();      // 重启播放
+  atk_mo1053_set_all();           // 设置音量等参数
+  atk_mo1053_reset_decode_time(); // 重置解码时间
+  while (lwrb_get_free(&MusicBuffer) >= 1024)
+  {
+    f_read(&fmp3, sd_buf, sizeof(sd_buf), &br);
+    if (br > 0)
+    {
+      lwrb_write_ex(&MusicBuffer, sd_buf, sizeof(sd_buf), &write_len, 0);
+    }
+  }
+  /* Infinite loop */
+  for(;;)
+  {
+    if (f_read(&fmp3, sd_buf, sizeof(sd_buf), &br) == FR_OK)
+    {
+      if (br > 0)
+      {
+        while (lwrb_write_ex(&MusicBuffer, sd_buf, sizeof(sd_buf), &write_len, LWRB_FLAG_WRITE_ALL) == 0) {
+          osDelay(1);
+        }
+      } else {
+        f_close(&fmp3);
+        while (1)
+        {
+          osDelay(5);
+        }
+      }  
+    }
+  }
+  /* USER CODE END StartFileReadTask */
+}
+
+/* USER CODE BEGIN Header_StartAudioPlayTask */
+/**
+* @brief Function implementing the AudioPlayTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartAudioPlayTask */
+void StartAudioPlayTask(void *argument)
+{
+  /* USER CODE BEGIN StartAudioPlayTask */
+  uint8_t data[32];
+  lwrb_sz_t read_len;
+  atk_mo1053_init();
+  atk_mo1053_spi_speed_high();
+
+  /* Infinite loop */
+  for(;;)
+  {
+    if (VS10XX_DQ == 0) {
+      osDelay(1);
+      continue;
+    }
+    if (lwrb_read_ex(&MusicBuffer, data, 32, &read_len, LWRB_FLAG_READ_ALL)) {
+      atk_mo1053_send_music_data(data);
+    } else {
+      osDelay(1);
+    }
+    
+  }
+  /* USER CODE END StartAudioPlayTask */
+}
+
+/* USER CODE BEGIN Header_StartGuiUpdateTask */
+/**
+* @brief Function implementing the GuiUpdateTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartGuiUpdateTask */
+void StartGuiUpdateTask(void *argument)
+{
+  /* USER CODE BEGIN StartGuiUpdateTask */
+  lv_demo_benchmark();
+  /* Infinite loop */
+  for(;;)
+  {
+    lv_timer_handler();
+    osDelay(5);
+  }
+  /* USER CODE END StartGuiUpdateTask */
+}
+
+/* USER CODE BEGIN Header_StartTouchTask */
+/**
+* @brief Function implementing the TouchTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTouchTask */
+void StartTouchTask(void *argument)
+{
+  /* USER CODE BEGIN StartTouchTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osSemaphoreAcquire(touchBinarySemHandle, portMAX_DELAY);
+    tp_dev.scan(0);
+    osDelay(50);
+  }
+  /* USER CODE END StartTouchTask */
+}
+
+/* USER CODE BEGIN Header_StartKeyScanTask */
+/**
+* @brief Function implementing the KeyScanTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartKeyScanTask */
+void StartKeyScanTask(void *argument)
+{
+  /* USER CODE BEGIN StartKeyScanTask */
+  KeyEvent_t key;
+  Key_Init();
+  /* Infinite loop */
+  for(;;)
+  {
+    key = Key_Scan();
+    if (key.event != KEY_EVENT_NONE) {
+      switch (key.key_id) {
+        case 1:
+          if (key.event == KEY_EVENT_SHORT) {
+            u4_printf("1:short\n");
+          } else {
+            u4_printf("1:long\n");
+          }
+          break;
+        case 2:
+          if (key.event == KEY_EVENT_SHORT) {
+            u4_printf("2:short\n");
+          } else {
+            u4_printf("2:long\n");
+          }
+          break;
+        case 3:
+          if (key.event == KEY_EVENT_SHORT) {
+            u4_printf("3:short\n");
+          } else {
+            u4_printf("3:long\n");
+          }
+          break;
+        default: break;
+      }
+    }
+    osDelay(50);
+  }
+  /* USER CODE END StartKeyScanTask */
+}
+
+/* USER CODE BEGIN Header_StartSensorTask */
+/**
+* @brief Function implementing the SensorTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartSensorTask */
+void StartSensorTask(void *argument)
+{
+  /* USER CODE BEGIN StartSensorTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartSensorTask */
+}
+
+/* USER CODE BEGIN Header_StartRtcTask */
+/**
+* @brief Function implementing the RtcTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartRtcTask */
+void StartRtcTask(void *argument)
+{
+  /* USER CODE BEGIN StartRtcTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartRtcTask */
+}
+
+/* Private application code --------------------------------------------------*/
+/* USER CODE BEGIN Application */
+
+/* USER CODE END Application */
+
