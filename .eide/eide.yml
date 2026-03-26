@@ -43,7 +43,8 @@ targets:
         - Middlewares/LVGL/porting
         - Middlewares/LVGL/demos
       libList: []
-    excludeList: []
+    excludeList:
+      - Middlewares/LVGL/demos
     toolchain: GCC
     toolchainConfigMap:
       GCC:
@@ -57,8 +58,7 @@ targets:
             ASM_FLAGS: -DDEBUG
           beforeBuildTasks: []
           c/cpp-compiler:
-            CXX_FLAGS: ""
-            C_FLAGS: ""
+            C_FLAGS: -u_printf_float
             language-c: c11
             language-cpp: c++11
             one-elf-section-per-data: true
@@ -67,15 +67,14 @@ targets:
             warnings: all-warnings
           global:
             $float-abi-type: hard
-            misc-control: []
+            arm-thumb-mode: thumb
             not-use-syscalls: true
             output-debug-info: enable
             use-newlib-nano: true
           linker:
             $outputTaskExcludes:
               - .bin
-            LD_FLAGS: ""
-            LIB_FLAGS: ""
+            $toolName: auto
             output-format: elf
             remove-unused-input-sections: true
         scatterFilePath: STM32H743VITX_FLASH.ld

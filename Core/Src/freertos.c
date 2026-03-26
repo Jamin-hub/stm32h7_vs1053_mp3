@@ -28,15 +28,17 @@
 /* USER CODE BEGIN Includes */
 #include "debug_uart.h"
 #include "fatfs.h"
+#include "rtc.h"
 #include "lwrb.h"
 #include "mp3_player.h"
 
 #include "lvgl.h"
-#include "lv_demos.h"
 #include "touch.h"
 
 #include "vs1053.h"
 #include "key.h"
+#include "sht30.h"
+#include "voltage.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -64,67 +66,77 @@ uint8_t MusicBufferData[4096];
 
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
-osThreadId_t         defaultTaskHandle;
+osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
-    .name       = "defaultTask",
-    .stack_size = 128 * 4,
-    .priority   = (osPriority_t)osPriorityLow,
+  .name = "defaultTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for FileReadTask */
-osThreadId_t         FileReadTaskHandle;
+osThreadId_t FileReadTaskHandle;
 const osThreadAttr_t FileReadTask_attributes = {
-    .name       = "FileReadTask",
-    .stack_size = 1024 * 4,
-    .priority   = (osPriority_t)osPriorityHigh,
+  .name = "FileReadTask",
+  .stack_size = 1024 * 4,
+  .priority = (osPriority_t) osPriorityHigh,
 };
 /* Definitions for AudioPlayTask */
-osThreadId_t         AudioPlayTaskHandle;
+osThreadId_t AudioPlayTaskHandle;
 const osThreadAttr_t AudioPlayTask_attributes = {
-    .name       = "AudioPlayTask",
-    .stack_size = 512 * 4,
-    .priority   = (osPriority_t)osPriorityRealtime,
+  .name = "AudioPlayTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityRealtime,
 };
 /* Definitions for GuiUpdateTask */
-osThreadId_t         GuiUpdateTaskHandle;
+osThreadId_t GuiUpdateTaskHandle;
 const osThreadAttr_t GuiUpdateTask_attributes = {
-    .name       = "GuiUpdateTask",
-    .stack_size = 1024 * 4,
-    .priority   = (osPriority_t)osPriorityBelowNormal,
+  .name = "GuiUpdateTask",
+  .stack_size = 1024 * 4,
+  .priority = (osPriority_t) osPriorityBelowNormal,
 };
 /* Definitions for TouchTask */
-osThreadId_t         TouchTaskHandle;
+osThreadId_t TouchTaskHandle;
 const osThreadAttr_t TouchTask_attributes = {
-    .name       = "TouchTask",
-    .stack_size = 128 * 4,
-    .priority   = (osPriority_t)osPriorityAboveNormal,
+  .name = "TouchTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* Definitions for KeyScanTask */
-osThreadId_t         KeyScanTaskHandle;
+osThreadId_t KeyScanTaskHandle;
 const osThreadAttr_t KeyScanTask_attributes = {
-    .name       = "KeyScanTask",
-    .stack_size = 128 * 4,
-    .priority   = (osPriority_t)osPriorityNormal,
+  .name = "KeyScanTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for SensorTask */
-osThreadId_t         SensorTaskHandle;
+osThreadId_t SensorTaskHandle;
 const osThreadAttr_t SensorTask_attributes = {
-    .name       = "SensorTask",
-    .stack_size = 128 * 4,
-    .priority   = (osPriority_t)osPriorityLow7,
+  .name = "SensorTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityLow7,
 };
 /* Definitions for RtcTask */
-osThreadId_t         RtcTaskHandle;
+osThreadId_t RtcTaskHandle;
 const osThreadAttr_t RtcTask_attributes = {
-    .name       = "RtcTask",
-    .stack_size = 128 * 4,
-    .priority   = (osPriority_t)osPriorityLow,
+  .name = "RtcTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for ControlTask */
-osThreadId_t         ControlTaskHandle;
+osThreadId_t ControlTaskHandle;
 const osThreadAttr_t ControlTask_attributes = {
-    .name       = "ControlTask",
-    .stack_size = 512 * 4,
-    .priority   = (osPriority_t)osPriorityNormal,
+  .name = "ControlTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for PlayerCmdQueue */
+osMessageQueueId_t PlayerCmdQueueHandle;
+const osMessageQueueAttr_t PlayerCmdQueue_attributes = {
+  .name = "PlayerCmdQueue"
+};
+/* Definitions for SensorMutex */
+osMutexId_t SensorMutexHandle;
+const osMutexAttr_t SensorMutex_attributes = {
+  .name = "SensorMutex"
 };
 
 /* Private function prototypes -----------------------------------------------*/
@@ -160,15 +172,17 @@ void vApplicationTickHook(void)
 /* USER CODE END 3 */
 
 /**
- * @brief  FreeRTOS initialization
- * @param  None
- * @retval None
- */
-void MX_FREERTOS_Init(void)
-{
+  * @brief  FreeRTOS initialization
+  * @param  None
+  * @retval None
+  */
+void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
+  /* Create the mutex(es) */
+  /* creation of SensorMutex */
+  SensorMutexHandle = osMutexNew(&SensorMutex_attributes);
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -181,6 +195,10 @@ void MX_FREERTOS_Init(void)
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
+
+  /* Create the queue(s) */
+  /* creation of PlayerCmdQueue */
+  PlayerCmdQueueHandle = osMessageQueueNew (8, sizeof(player_msg_t), &PlayerCmdQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -221,6 +239,7 @@ void MX_FREERTOS_Init(void)
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
   /* USER CODE END RTOS_EVENTS */
+
 }
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -265,7 +284,7 @@ void StartFileReadTask(void *argument)
   }
   ScanMusicFiles("0:/Music");
 
-  Player_SwitchTo(5);
+  Player_SwitchTo(0);
   /* Infinite loop */
   for (;;) {
     /* 1. 处理“切歌请求” */
@@ -286,12 +305,14 @@ void StartFileReadTask(void *argument)
       file_opened = 1;
       // 重启解码器
       atk_mo1053_restart_play();
+      Player_SetVolume(g_player.volume); /* 设置音量 */
       atk_mo1053_set_all();
       atk_mo1053_reset_decode_time();
-      if (strstr(song_list[g_player.current_index].path, ".flac") || strstr(song_list[g_player.current_index].path, ".FLAC")) {
-			  atk_mo1053_load_patch((uint16_t *)vs1053b_patch, VS1053B_PATCHLEN); // 加载 MP3 补丁
-      } 
-      
+      if (strstr(song_list[g_player.current_index].path, ".flac")
+          || strstr(song_list[g_player.current_index].path, ".FLAC")) {
+        atk_mo1053_load_patch((uint16_t *)vs1053b_patch, VS1053B_PATCHLEN); // 加载 MP3 补丁
+      }
+
       g_player.state = PLAYER_PLAY;
 
       // 预填充 buffer（避免卡顿）
@@ -316,14 +337,14 @@ void StartFileReadTask(void *argument)
             g_player.state = PLAYER_STOP;
           }
         }
-      }  else osDelay(5);
-    } 
-    /* 🔵 3. 暂停状态 */
+      } else osDelay(3);
+    }
+    /* 3. 暂停状态 */
     else if (g_player.state == PLAYER_PAUSE) {
-      osDelay(10);
+      osDelay(100);
     }
 
-    /* ⚫ 4. 停止状态 */
+    /* 4. 停止状态 */
     else {
       Player_SwitchTo(Player_GetNextIndex());
       osDelay(500);
@@ -356,7 +377,7 @@ void StartAudioPlayTask(void *argument)
     if (lwrb_read_ex(&MusicBuffer, data, 32, &read_len, LWRB_FLAG_READ_ALL)) {
       atk_mo1053_send_music_data(data);
     } else {
-      osDelay(2);
+      osDelay(1);
     }
   }
   /* USER CODE END StartAudioPlayTask */
@@ -372,7 +393,7 @@ void StartAudioPlayTask(void *argument)
 void StartGuiUpdateTask(void *argument)
 {
   /* USER CODE BEGIN StartGuiUpdateTask */
-  lv_demo_benchmark();
+
   /* Infinite loop */
   for (;;) {
     lv_timer_handler();
@@ -412,6 +433,7 @@ void StartKeyScanTask(void *argument)
   /* USER CODE BEGIN StartKeyScanTask */
   KeyEvent_t key;
   Key_Init();
+  player_msg_t msg;
   /* Infinite loop */
   for (;;) {
     key = Key_Scan();
@@ -419,31 +441,29 @@ void StartKeyScanTask(void *argument)
       switch (key.key_id) {
         case 1:
           if (key.event == KEY_EVENT_SHORT) {
-            u4_printf("1:short\n");
-            Player_SwitchTo(Player_GetPrevIndex());
+            msg.cmd = CMD_VOL_UP;
           } else {
-            u4_printf("1:long\n");
+            msg.cmd = CMD_PREV;
           }
           break;
         case 2:
           if (key.event == KEY_EVENT_SHORT) {
-            u4_printf("2:short\n");
-            g_player.state = PLAYER_PAUSE;
+            msg.cmd = CMD_PAUSE;
           } else {
-            u4_printf("2:long\n");
-            g_player.state = PLAYER_PLAY;
+            msg.cmd = CMD_PLAY;
           }
           break;
         case 3:
           if (key.event == KEY_EVENT_SHORT) {
-            u4_printf("3:short\n");
-            Player_SwitchTo(Player_GetNextIndex());
+            msg.cmd = CMD_VOL_DOWN;
           } else {
-            u4_printf("3:long\n");
+            msg.cmd = CMD_NEXT;
           }
           break;
         default: break;
       }
+      msg.param = 0;
+      osMessageQueuePut(PlayerCmdQueueHandle, &msg, 0, 100);
     }
     osDelay(100);
   }
@@ -460,9 +480,18 @@ void StartKeyScanTask(void *argument)
 void StartSensorTask(void *argument)
 {
   /* USER CODE BEGIN StartSensorTask */
+  float humidity, temperature, voltage;
   /* Infinite loop */
   for (;;) {
-    osDelay(1);
+    // ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    osMutexAcquire(SensorMutexHandle, 0);
+    if (!SHT30_Read(&humidity, &temperature)) {
+      u4_printf("T: %d°C, H: %d%%\n", (uint8_t)temperature, (uint8_t)humidity);
+    }
+    voltage = ADC_ReadVoltage(&hadc1);
+    u4_printf("%d\n", (uint8_t)voltage);
+    osMutexRelease(SensorMutexHandle);
+    osDelay(10000);
   }
   /* USER CODE END StartSensorTask */
 }
@@ -479,7 +508,15 @@ void StartRtcTask(void *argument)
   /* USER CODE BEGIN StartRtcTask */
   /* Infinite loop */
   for (;;) {
-    osDelay(1);
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+    RTC_TimeTypeDef time;
+    RTC_DateTypeDef date;
+
+    HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
+    HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
+
+    u4_printf("分钟更新: %02d:%02d\r\n", time.Hours, time.Minutes);
   }
   /* USER CODE END StartRtcTask */
 }
@@ -494,9 +531,48 @@ void StartRtcTask(void *argument)
 void StartControlTask(void *argument)
 {
   /* USER CODE BEGIN StartControlTask */
+  player_msg_t msg;
   /* Infinite loop */
   for (;;) {
-    osDelay(1);
+    osMessageQueueGet(PlayerCmdQueueHandle, &msg, 0, osWaitForever);
+    switch (msg.cmd) {
+      case CMD_PLAY:
+        g_player.state = PLAYER_PLAY;
+        break;
+      case CMD_PAUSE:
+        g_player.state = PLAYER_PAUSE;
+        break;
+      case CMD_NEXT:
+        Player_SwitchTo(Player_GetNextIndex());
+        break;
+      case CMD_PREV:
+        Player_SwitchTo(Player_GetPrevIndex());
+        break;
+      case CMD_SET_INDEX:
+        Player_SwitchTo((uint8_t)msg.param);
+        break;
+      case CMD_SET_MODE:
+        g_player.mode = msg.param;
+        break;
+      case CMD_VOL_UP:
+        if (g_player.volume < 20) {
+          g_player.volume ++;
+        }
+        Player_SetVolume(g_player.volume);
+        break;
+      case CMD_VOL_DOWN:
+        if (g_player.volume > 0) {
+          g_player.volume --;
+        }
+        Player_SetVolume(g_player.volume);
+        break;
+      case CMD_SET_VOL:
+        g_player.volume = msg.param;
+        Player_SetVolume(g_player.volume);
+        break;
+      default: break;
+    }
+
   }
   /* USER CODE END StartControlTask */
 }
@@ -505,3 +581,4 @@ void StartControlTask(void *argument)
 /* USER CODE BEGIN Application */
 
 /* USER CODE END Application */
+

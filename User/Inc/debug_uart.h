@@ -14,7 +14,7 @@
         if (len > 0) { \
             HAL_UART_Transmit(&huart4, (uint8_t*)debug_uart_buf, \
                               (len < (int)sizeof(debug_uart_buf)) ? (uint16_t)len : (uint16_t)sizeof(debug_uart_buf)-1, \
-                              HAL_MAX_DELAY); \
+                              100); \
         } \
     } while(0)
 

@@ -25,6 +25,7 @@
 #include "fatfs.h"
 #include "i2c.h"
 #include "mdma.h"
+#include "rtc.h"
 #include "sdmmc.h"
 #include "spi.h"
 #include "usart.h"
@@ -61,6 +62,7 @@
 
 /* USER CODE BEGIN PV */
 extern osThreadId_t TouchTaskHandle;
+extern osThreadId_t RtcTaskHandle;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -123,6 +125,7 @@ int main(void)
   MX_I2C1_Init();
   MX_I2C2_Init();
   MX_SPI1_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
   DMA_Register();
   lv_init(); 
@@ -169,11 +172,17 @@ void SystemClock_Config(void)
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
+  /** Configure LSE Drive Capability
+  */
+  HAL_PWR_EnableBkUpAccess();
+  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
+
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 5;
@@ -213,9 +222,22 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   if (GPIO_Pin == GPIO_PIN_14) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    vTaskNotifyGiveFromISR(TouchTaskHandle, &xHigherPriorityTaskWoken);
+    if (TouchTaskHandle != NULL) {
+      vTaskNotifyGiveFromISR(TouchTaskHandle, &xHigherPriorityTaskWoken);
+    }
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
+}
+
+void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
+{
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+  if (RtcTaskHandle != NULL) {
+    vTaskNotifyGiveFromISR(RtcTaskHandle, &xHigherPriorityTaskWoken);
+  }
+
+  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 /* USER CODE END 4 */
 

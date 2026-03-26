@@ -26,7 +26,11 @@ typedef enum {
   CMD_PAUSE, 
   CMD_NEXT, 
   CMD_PREV, 
-  CMD_SET_MODE 
+  CMD_SET_INDEX,
+  CMD_SET_MODE,
+  CMD_VOL_UP,
+  CMD_VOL_DOWN,
+  CMD_SET_VOL 
 } player_cmd_t;
 
 typedef struct {
@@ -49,7 +53,7 @@ typedef struct {
   uint8_t song_count;    // 歌曲总数
   uint8_t need_open; // 需要打开新文件
 
-  uint8_t volume; // 音量（可选）
+  int volume; // 音量（可选）
 } player_t;
 
 extern player_t g_player;
@@ -60,6 +64,7 @@ extern song_t song_list[MAX_SONGS];
 uint8_t Player_GetNextIndex(void);
 uint8_t Player_GetPrevIndex(void);
 void Player_SwitchTo(uint8_t index);
+void Player_SetVolume(uint8_t vol);
 
 void ScanMusicFiles(const char *path);
 

@@ -669,11 +669,10 @@ void atk_mo1053_set_speaker(uint8_t sw)
  * @retval      无
  */
 void atk_mo1053_set_all(void)
-{
-    atk_mo1053_set_volume(vsset.mvol);                                           /* 设置音量 */
+{                  
     atk_mo1053_set_tone(vsset.bflimit, vsset.bass, vsset.tflimit, vsset.treble); /* 高低音设置 */
     atk_mo1053_set_effect(vsset.effect);                                         /* 设置空间效果 */
-    atk_mo1053_set_speaker(vsset.speakersw);                                     /* 控制板载喇叭状态 */
+    // atk_mo1053_set_speaker(vsset.speakersw);                                     /* 控制板载喇叭状态 */
 }
 
 

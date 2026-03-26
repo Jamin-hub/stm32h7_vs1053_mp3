@@ -1,4 +1,5 @@
 #include "mp3_player.h"
+#include "vs1053.h"
 
 #include "debug_uart.h"
 #include "fatfs.h"
@@ -14,6 +15,7 @@ player_t g_player = {
   .need_open = 1,
   .song_count = 0,
   .state = PLAYER_PLAY,
+  .volume = 12
 };
 
 song_t song_list[MAX_SONGS];
@@ -54,6 +56,15 @@ void Player_SwitchTo(uint8_t index)
     g_player.state = PLAYER_PLAY;
 }
 
+void Player_SetVolume(uint8_t vol)
+{
+    if (vol > 20) vol = 20;
+
+    // 简单“伪对数”优化
+    uint8_t vs_vol = 225 - (vol * vol * (225 - 125) / (20 * 20));
+
+    atk_mo1053_set_volume(vs_vol);
+}
 
 // 判断扩展名是否为音频文件
 static uint8_t is_audio_file(const char *filename)
