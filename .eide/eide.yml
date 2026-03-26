@@ -42,6 +42,8 @@ targets:
         - Middlewares/LVGL
         - Middlewares/LVGL/porting
         - Middlewares/LVGL/demos
+        - Middlewares/LVGL/generated
+        - Middlewares/LVGL/custom
       libList: []
     excludeList:
       - Middlewares/LVGL/demos

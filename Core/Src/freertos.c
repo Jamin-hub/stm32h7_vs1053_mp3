@@ -33,6 +33,8 @@
 #include "mp3_player.h"
 
 #include "lvgl.h"
+#include "gui_guider.h"
+#include "events_init.h"
 #include "touch.h"
 
 #include "vs1053.h"
@@ -59,7 +61,7 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 FATFS   fs;
-uint8_t flag = 1;
+lv_ui guider_ui;
 /* Music Data Buffer */
 lwrb_t  MusicBuffer;
 uint8_t MusicBufferData[4096];
@@ -393,7 +395,8 @@ void StartAudioPlayTask(void *argument)
 void StartGuiUpdateTask(void *argument)
 {
   /* USER CODE BEGIN StartGuiUpdateTask */
-
+  setup_ui(&guider_ui);
+  events_init(&guider_ui);
   /* Infinite loop */
   for (;;) {
     lv_timer_handler();

@@ -112,7 +112,7 @@ void ScanMusicFiles(const char *path)
     if (g_player.song_count >= MAX_SONGS)
       break;
 
-    /* ✅ 安全拼接路径 */
+    /* 安全拼接路径 */
     int len = snprintf(song_list[g_player.song_count].path, MAX_PATH, "%s/%s", path, fno.fname);
 
     if (len < 0 || len >= MAX_PATH) {
@@ -120,7 +120,7 @@ void ScanMusicFiles(const char *path)
       continue;
     }
 
-    /* ✅ 保存文件名（用于UI显示） */
+    /* 保存文件名（用于UI显示） */
     strncpy(song_list[g_player.song_count].name, fno.fname, sizeof(song_list[g_player.song_count].name) - 1);
 
     song_list[g_player.song_count].name[sizeof(song_list[g_player.song_count].name) - 1] = '\0';
