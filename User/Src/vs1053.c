@@ -470,7 +470,7 @@ void atk_mo1053_restart_play(void)
     {
         vsbuf[n] = 0;                               /* 清零 */
     }       
-        
+   
     temp = atk_mo1053_read_reg(SPI_MODE);           /* 读取SPI_MODE的内容 */
     temp |= 1 << 3;                                 /* 设置SM_CANCEL位 */
     temp |= 1 << 2;                                 /* 设置SM_LAYER12位,允许播放MP1,MP2 */
@@ -520,6 +520,7 @@ void atk_mo1053_restart_play(void)
         atk_mo1053_reset();                         /* 硬复位 */
         atk_mo1053_soft_reset();                    /* 软复位 */
     }
+    // atk_mo1053_spi_speed_high();
 }
 
 /**

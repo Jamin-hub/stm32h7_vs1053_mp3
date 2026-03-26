@@ -35,6 +35,7 @@
 /* USER CODE BEGIN Includes */
 #include "debug_uart.h"
 
+#include "task.h"
 #include "lvgl.h"
 #include "lv_port_disp.h"
 #include "lv_port_indev.h"
@@ -59,7 +60,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-extern osSemaphoreId_t touchBinarySemHandle;
+extern osThreadId_t TouchTaskHandle;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -211,7 +212,9 @@ void SystemClock_Config(void)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   if (GPIO_Pin == GPIO_PIN_14) {
-    osSemaphoreRelease(touchBinarySemHandle);
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    vTaskNotifyGiveFromISR(TouchTaskHandle, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 }
 /* USER CODE END 4 */
