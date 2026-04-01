@@ -15,21 +15,15 @@
 #include "freemaster_client.h"
 #endif
 
-static uint8_t current_state = 0; // 0=Play, 1=Pause, 2=Stop
+#include "FreeRTOS.h"
+#include "task.h"
+#include "cmsis_os2.h"
+#include "mp3_player.h"
 
-static void screen_event_handler (lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    switch (code) {
-    case LV_EVENT_SCREEN_LOAD_START:
-    {
-        lv_obj_add_state(guider_ui.screen_imgbtn_play, LV_STATE_CHECKED);
-        break;
-    }
-    default:
-        break;
-    }
-}
+static player_msg_t msg;
+extern osThreadId_t GuiUpdateTaskHandle;
+extern osMessageQueueId_t PlayerCmdQueueHandle;
+static uint8_t current_state = 0; // 0=Play, 1=Pause, 2=Stop
 
 static void screen_imgbtn_play_event_handler (lv_event_t *e)
 {
@@ -38,11 +32,11 @@ static void screen_imgbtn_play_event_handler (lv_event_t *e)
     case LV_EVENT_VALUE_CHANGED:
     {
         if (lv_obj_has_state(guider_ui.screen_imgbtn_play, LV_STATE_CHECKED)) {
-            // cmd = AUDIO_PLAY; // Play
-            // xQueueSend(CmdQueueHandle, &cmd, 100);
+            msg.cmd = CMD_PLAY;
+            osMessageQueuePut(PlayerCmdQueueHandle, &msg, 0, 100);
         } else {
-            // cmd = AUDIO_PAUSE; // Paused
-            // xQueueSend(CmdQueueHandle, &cmd, 100);
+            msg.cmd = CMD_PAUSE;
+            osMessageQueuePut(PlayerCmdQueueHandle, &msg, 0, 100);
         }
         break;
     }
@@ -57,9 +51,8 @@ static void screen_imgbtn_last_event_handler (lv_event_t *e)
     switch (code) {
     case LV_EVENT_CLICKED:
     {
-        // cmd = AUDIO_PREV; // Previous track
-        // xQueueSend(CmdQueueHandle, &cmd, 100);
-        lv_obj_add_state(guider_ui.screen_imgbtn_play, LV_STATE_CHECKED);
+        msg.cmd = CMD_PREV;
+        osMessageQueuePut(PlayerCmdQueueHandle, &msg, 0, 100);
         break;
     }
     default:
@@ -73,11 +66,36 @@ static void screen_imgbtn_next_event_handler (lv_event_t *e)
     switch (code) {
     case LV_EVENT_CLICKED:
     {
-        // cmd = AUDIO_NEXT;  // Next Track
-        // xQueueSend(CmdQueueHandle, &cmd, 100);
-        lv_obj_add_state(guider_ui.screen_imgbtn_play, LV_STATE_CHECKED);
+        msg.cmd = CMD_NEXT;
+        osMessageQueuePut(PlayerCmdQueueHandle, &msg, 0, 100);
         break;
     }
+    default:
+        break;
+    }
+}
+
+static void screen_slider_song_event_handler (lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    switch (code) {
+    case LV_EVENT_RELEASED:
+    {
+        // lv_obj_t * slider = lv_event_get_target(e);
+
+        // int val = lv_slider_get_value(slider);
+        // int max = lv_slider_get_max_value(slider);
+
+        // float percent = (float)val / max;
+
+        // uint32_t file_size = song_list[g_player.current_index].size;
+
+        // g_player.seek_pos = percent * file_size;
+        // g_player.need_seek = 1;
+        // g_player.update_time = 1;
+        break;
+    }
+    
     default:
         break;
     }
@@ -112,14 +130,34 @@ static void screen_btn_mode_event_handler (lv_event_t *e)
         switch(current_state) {
         case 0:
             lv_obj_clear_flag(guider_ui.screen_img_mode0, LV_OBJ_FLAG_HIDDEN);
+            msg.param = PLAY_MODE_ALL_LOOP;
             break;
         case 1:
             lv_obj_clear_flag(guider_ui.screen_img_mode1, LV_OBJ_FLAG_HIDDEN);
+            msg.param = PLAY_MODE_LOOP;
             break;
         case 2:
             lv_obj_clear_flag(guider_ui.screen_img_mode2, LV_OBJ_FLAG_HIDDEN);
+            msg.param = PLAY_MODE_RANDOM;
             break;
         }
+        msg.cmd = CMD_SET_MODE;
+        osMessageQueuePut(PlayerCmdQueueHandle, &msg, 0, 100);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+static void screen_1_event_handler (lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    switch (code) {
+    case LV_EVENT_SCREEN_LOAD_START:
+    {
+        ui_data.dirty_flag |= UI_DIRTY_LIST;
+        xTaskNotifyGive(GuiUpdateTaskHandle);
         break;
     }
     default:
@@ -149,10 +187,10 @@ static void screen_btn_1_event_handler (lv_event_t *e)
 
 void events_init_screen (lv_ui *ui)
 {
-    lv_obj_add_event_cb(ui->screen, screen_event_handler, LV_EVENT_ALL, ui);
     lv_obj_add_event_cb(ui->screen_imgbtn_play, screen_imgbtn_play_event_handler, LV_EVENT_ALL, ui);
     lv_obj_add_event_cb(ui->screen_imgbtn_last, screen_imgbtn_last_event_handler, LV_EVENT_ALL, ui);
     lv_obj_add_event_cb(ui->screen_imgbtn_next, screen_imgbtn_next_event_handler, LV_EVENT_ALL, ui);
+    lv_obj_add_event_cb(ui->screen_slider_song, screen_slider_song_event_handler, LV_EVENT_ALL, ui);
     lv_obj_add_event_cb(ui->screen_imgbtn_list, screen_imgbtn_list_event_handler, LV_EVENT_ALL, ui);
     lv_obj_add_event_cb(ui->screen_btn_mode, screen_btn_mode_event_handler, LV_EVENT_ALL, ui);
     lv_obj_add_event_cb(ui->screen_btn_1, screen_btn_1_event_handler, LV_EVENT_ALL, ui);
@@ -166,21 +204,7 @@ static void screen_1_btn_1_event_handler (lv_event_t *e)
     {
         ui_load_scr_animation(&guider_ui, &guider_ui.screen, guider_ui.screen_del, &guider_ui.screen_1_del, setup_scr_screen, LV_SCR_LOAD_ANIM_OVER_RIGHT, 200, 200, true, false);
         break;
-    }
-    default:
-        break;
-    }
-}
-
-static void screen_1_list_1_item0_event_handler (lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    switch (code) {
-    case LV_EVENT_CLICKED:
-    {
-        ui_load_scr_animation(&guider_ui, &guider_ui.screen, guider_ui.screen_del, &guider_ui.screen_1_del, setup_scr_screen, LV_SCR_LOAD_ANIM_OVER_RIGHT, 200, 200, false, false);
-        break;
-    }
+    } 
     default:
         break;
     }
@@ -188,8 +212,8 @@ static void screen_1_list_1_item0_event_handler (lv_event_t *e)
 
 void events_init_screen_1 (lv_ui *ui)
 {
+    lv_obj_add_event_cb(ui->screen_1, screen_1_event_handler, LV_EVENT_ALL, ui);
     lv_obj_add_event_cb(ui->screen_1_btn_1, screen_1_btn_1_event_handler, LV_EVENT_ALL, ui);
-    lv_obj_add_event_cb(ui->screen_1_list_1_item0, screen_1_list_1_item0_event_handler, LV_EVENT_ALL, ui);
 }
 
 

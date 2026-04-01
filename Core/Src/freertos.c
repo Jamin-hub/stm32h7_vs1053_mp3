@@ -31,6 +31,7 @@
 #include "rtc.h"
 #include "lwrb.h"
 #include "mp3_player.h"
+#include "gbk2utf8.h"
 
 #include "lvgl.h"
 #include "gui_guider.h"
@@ -61,7 +62,7 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 FATFS   fs;
-lv_ui guider_ui;
+lv_ui   guider_ui;
 /* Music Data Buffer */
 lwrb_t  MusicBuffer;
 uint8_t MusicBufferData[4096];
@@ -135,6 +136,11 @@ osMessageQueueId_t PlayerCmdQueueHandle;
 const osMessageQueueAttr_t PlayerCmdQueue_attributes = {
   .name = "PlayerCmdQueue"
 };
+/* Definitions for PlayerTimer */
+osTimerId_t PlayerTimerHandle;
+const osTimerAttr_t PlayerTimer_attributes = {
+  .name = "PlayerTimer"
+};
 /* Definitions for SensorMutex */
 osMutexId_t SensorMutexHandle;
 const osMutexAttr_t SensorMutex_attributes = {
@@ -155,6 +161,7 @@ void StartKeyScanTask(void *argument);
 void StartSensorTask(void *argument);
 void StartRtcTask(void *argument);
 void StartControlTask(void *argument);
+void CallbackPlayerTimer(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -193,6 +200,10 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
+
+  /* Create the timer(s) */
+  /* creation of PlayerTimer */
+  PlayerTimerHandle = osTimerNew(CallbackPlayerTimer, osTimerOnce, NULL, &PlayerTimer_attributes);
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
@@ -256,7 +267,15 @@ void StartDefaultTask(void *argument)
   /* USER CODE BEGIN StartDefaultTask */
   /* Infinite loop */
   for (;;) {
-    osDelay(100);
+    if (g_player.state == PLAYER_PLAY) {
+      osDelay(pdMS_TO_TICKS(1000));
+      ui_data.cur_time++;
+      if (ui_data.cur_time >= ui_data.total_time) {
+        ui_data.cur_time = ui_data.total_time;
+      }
+      ui_data.dirty_flag |= UI_DIRTY_PROGRESS;
+      xTaskNotifyGive(GuiUpdateTaskHandle);
+    } else osDelay(100);
   }
   /* USER CODE END StartDefaultTask */
 }
@@ -274,8 +293,10 @@ void StartFileReadTask(void *argument)
   FRESULT        res;
   FIL            fmp3; // 文件对象
   UINT           br;
+
   lwrb_sz_t      write_len;
   uint8_t        sd_buf[1024];
+
   static uint8_t file_opened = 0;
 
   lwrb_init(&MusicBuffer, MusicBufferData, sizeof(MusicBufferData));
@@ -289,6 +310,26 @@ void StartFileReadTask(void *argument)
   Player_SwitchTo(0);
   /* Infinite loop */
   for (;;) {
+    /*  0. 处理“拖动进度条（seek）请求”  */
+    // if (g_player.need_seek && file_opened) {
+      
+    //   g_player.need_seek = 0;
+
+    //   // 停止当前解码（非常关键）
+    //   atk_mo1053_soft_reset(); // 或 restart_play()
+
+    //   // 移动文件指针
+    //   f_lseek(&fmp3, g_player.seek_pos);
+
+    //   // 清空环形缓冲区
+    //   lwrb_reset(&MusicBuffer);
+
+    //   //（可选）更新时间
+    //   ui_data.cur_time = (g_player.seek_pos * ui_data.total_time) / song_list[g_player.current_index].size;
+    //   ui_data.dirty_flag |= UI_DIRTY_TIME;
+    //   xTaskNotifyGive(GuiUpdateTaskHandle);
+    // }
+
     /* 1. 处理“切歌请求” */
     if (g_player.need_open) {
       g_player.need_open = 0;
@@ -300,9 +341,17 @@ void StartFileReadTask(void *argument)
       lwrb_reset(&MusicBuffer); // 清空缓冲区
 
       res = f_open(&fmp3, song_list[g_player.current_index].path, FA_READ);
+      song_list[g_player.current_index].size = f_size(&fmp3);
+      // 通知 lvgl 任务刷新歌曲名字和作者
+      str_gbk2utf8(song_list[g_player.current_index].title, ui_data.title);
+      str_gbk2utf8(song_list[g_player.current_index].artist, ui_data.artist);
+      ui_data.dirty_flag |= UI_DIRTY_TITLE;
+      xTaskNotifyGive(GuiUpdateTaskHandle);
+
+      osTimerStart(PlayerTimerHandle, 5000);
+
       if (res != FR_OK) {
         u4_printf("file open err\n");
-        continue;
       }
       file_opened = 1;
       // 重启解码器
@@ -327,6 +376,7 @@ void StartFileReadTask(void *argument)
         }
       }
       xTaskNotifyGive(AudioPlayTaskHandle);
+      ui_data.cur_time = 0;
     }
     /* 2. 正常播放状态 */
     if (g_player.state == PLAYER_PLAY && file_opened) {
@@ -349,7 +399,7 @@ void StartFileReadTask(void *argument)
     /* 4. 停止状态 */
     else {
       Player_SwitchTo(Player_GetNextIndex());
-      osDelay(500);
+      osDelay(100);
     }
   }
   /* USER CODE END StartFileReadTask */
@@ -400,6 +450,54 @@ void StartGuiUpdateTask(void *argument)
   /* Infinite loop */
   for (;;) {
     lv_timer_handler();
+    /* 等待通知 */
+    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100))) {
+      uint32_t flag = ui_data.dirty_flag;
+
+      /* 清除标志 */
+      ui_data.dirty_flag = 0;
+
+      if (flag & UI_DIRTY_TIME) {
+        lv_label_set_text_fmt(guider_ui.screen_text_total, "%02ld:%02ld", ui_data.total_time / 60, ui_data.total_time % 60);
+        lv_bar_set_range(guider_ui.screen_slider_song, 0, ui_data.total_time);
+      
+      }
+
+      if (flag & UI_DIRTY_PROGRESS) {
+        lv_label_set_text_fmt(guider_ui.screen_text_now, "%02ld:%02ld", ui_data.cur_time / 60, ui_data.cur_time % 60);
+        lv_bar_set_value(guider_ui.screen_slider_song, ui_data.cur_time, LV_ANIM_OFF);
+      }
+
+      if (flag & UI_DIRTY_TITLE) {
+        lv_label_set_text(guider_ui.screen_label_title, ui_data.title);
+        lv_label_set_text(guider_ui.screen_label_artist, ui_data.artist);
+      }
+
+      if (flag & UI_DIRTY_ENV) {
+        lv_label_set_text_fmt(guider_ui.screen_label_env, "%dC %d%%", ui_data.temperature, ui_data.humidity);
+        if (ui_data.battery >= 80) {
+          lv_label_set_text(guider_ui.screen_label_battery, "" LV_SYMBOL_BATTERY_FULL " ");
+        } else if (ui_data.battery >= 60) {
+          lv_label_set_text(guider_ui.screen_label_battery, "" LV_SYMBOL_BATTERY_3 " ");
+        } else if (ui_data.battery >= 40) {
+          lv_label_set_text(guider_ui.screen_label_battery, "" LV_SYMBOL_BATTERY_1 " ");
+        } else lv_label_set_text(guider_ui.screen_label_battery, "" LV_SYMBOL_BATTERY_EMPTY " ");
+        
+      }
+
+      if (flag & UI_DIRTY_PLAYBTN) {
+        lv_obj_add_state(guider_ui.screen_imgbtn_play, LV_STATE_CHECKED);
+      }
+
+      if (flag & UI_DIRTY_CLOCK) {
+        lv_label_set_text_fmt(guider_ui.screen_label_clock, "%02d:%02d", ui_data.hour, ui_data.min);
+      }
+
+      if (flag & UI_DIRTY_LIST) {
+        ui_music_list_update(&guider_ui);
+        lv_label_set_text_fmt(guider_ui.screen_1_label_total, "共 %d 首 · 本地音乐", g_player.song_count);
+      }
+    }
     osDelay(5);
   }
   /* USER CODE END StartGuiUpdateTask */
@@ -446,7 +544,7 @@ void StartKeyScanTask(void *argument)
           if (key.event == KEY_EVENT_SHORT) {
             msg.cmd = CMD_VOL_UP;
           } else {
-            msg.cmd = CMD_PREV;
+            msg.cmd = CMD_NEXT;
           }
           break;
         case 2:
@@ -460,7 +558,7 @@ void StartKeyScanTask(void *argument)
           if (key.event == KEY_EVENT_SHORT) {
             msg.cmd = CMD_VOL_DOWN;
           } else {
-            msg.cmd = CMD_NEXT;
+            msg.cmd = CMD_PREV;
           }
           break;
         default: break;
@@ -484,17 +582,22 @@ void StartSensorTask(void *argument)
 {
   /* USER CODE BEGIN StartSensorTask */
   float humidity, temperature, voltage;
+  ADC_Calibration();
   /* Infinite loop */
   for (;;) {
     // ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     osMutexAcquire(SensorMutexHandle, 0);
     if (!SHT30_Read(&humidity, &temperature)) {
-      u4_printf("T: %d°C, H: %d%%\n", (uint8_t)temperature, (uint8_t)humidity);
+      ui_data.temperature = temperature;
+      ui_data.humidity = humidity;
     }
     voltage = ADC_ReadVoltage(&hadc1);
-    u4_printf("%d\n", (uint8_t)voltage);
     osMutexRelease(SensorMutexHandle);
-    osDelay(10000);
+    ui_data.battery = voltage;
+    u4_printf("%d\n", ui_data.battery);
+    ui_data.dirty_flag |= UI_DIRTY_ENV;
+    xTaskNotifyGive(GuiUpdateTaskHandle);
+    osDelay(30000);
   }
   /* USER CODE END StartSensorTask */
 }
@@ -509,17 +612,19 @@ void StartSensorTask(void *argument)
 void StartRtcTask(void *argument)
 {
   /* USER CODE BEGIN StartRtcTask */
+  RTC_TimeTypeDef time;
+  RTC_DateTypeDef date;
   /* Infinite loop */
   for (;;) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-    RTC_TimeTypeDef time;
-    RTC_DateTypeDef date;
-
     HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
     HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
 
-    u4_printf("分钟更新: %02d:%02d\r\n", time.Hours, time.Minutes);
+    ui_data.hour = time.Hours;
+    ui_data.min = time.Minutes;
+    ui_data.dirty_flag |= UI_DIRTY_CLOCK;
+    xTaskNotifyGive(GuiUpdateTaskHandle); // 通知lvgl任务刷新
   }
   /* USER CODE END StartRtcTask */
 }
@@ -578,6 +683,17 @@ void StartControlTask(void *argument)
 
   }
   /* USER CODE END StartControlTask */
+}
+
+/* CallbackPlayerTimer function */
+void CallbackPlayerTimer(void *argument)
+{
+  /* USER CODE BEGIN CallbackPlayerTimer */
+  uint16_t bitrate_kbps = atk_mo1053_get_bitrate();
+  ui_data.total_time = (song_list[g_player.current_index].size * 8) / (bitrate_kbps * 1000);
+  ui_data.dirty_flag |= UI_DIRTY_TIME;
+  xTaskNotifyGive(GuiUpdateTaskHandle); // 通知lvgl任务刷新
+  /* USER CODE END CallbackPlayerTimer */
 }
 
 /* Private application code --------------------------------------------------*/

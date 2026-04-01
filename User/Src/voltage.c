@@ -12,7 +12,10 @@ float ADC_ReadVoltage(ADC_HandleTypeDef* hadc) {
 		return -1.0f;
 	uint32_t raw = HAL_ADC_GetValue(hadc);
 	HAL_ADC_Stop(hadc);
-	return ((raw * 3.3 / 4095.0f) * 2 - 3) / 1 * 100;
+	float v_bat = (raw * 3.3 / 4095.0f) * 2;
+	if (v_bat >= 4.2f) return 100.0f;
+  if (v_bat <= 3.0f) return 0.0f;
+	return (v_bat - 3) / 1.2 * 100;
 }
 
 /**

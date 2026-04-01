@@ -14,7 +14,7 @@
 #include "widgets_init.h"
 #include "custom.h"
 
-
+lv_style_t style_screen_1_list_1_extra_btns_main_default;
 
 void setup_scr_screen_1(lv_ui *ui)
 {
@@ -120,18 +120,6 @@ void setup_scr_screen_1(lv_ui *ui)
 
     //Write codes screen_1_list_1
     ui->screen_1_list_1 = lv_list_create(ui->screen_1);
-    ui->screen_1_list_1_item0 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_AUDIO, "save_1");
-    ui->screen_1_list_1_item1 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_SAVE, "save_2");
-    ui->screen_1_list_1_item2 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_SAVE, "save_3");
-    ui->screen_1_list_1_item3 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_SAVE, "save_4");
-    ui->screen_1_list_1_item4 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_SAVE, "save_5");
-    ui->screen_1_list_1_item5 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_SAVE, "save_6");
-    ui->screen_1_list_1_item6 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_SAVE, "save_7");
-    ui->screen_1_list_1_item7 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_SAVE, "丰田合肥");
-    ui->screen_1_list_1_item8 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_SAVE, "save_8");
-    ui->screen_1_list_1_item9 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_SAVE, "save_9");
-    ui->screen_1_list_1_item10 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_SAVE, "save_10");
-    ui->screen_1_list_1_item11 = lv_list_add_btn(ui->screen_1_list_1, LV_SYMBOL_SAVE, "save_11");
     lv_obj_set_pos(ui->screen_1_list_1, 0, 72);
     lv_obj_set_size(ui->screen_1_list_1, 320, 408);
     lv_obj_set_scrollbar_mode(ui->screen_1_list_1, LV_SCROLLBAR_MODE_ACTIVE);
@@ -167,7 +155,7 @@ void setup_scr_screen_1(lv_ui *ui)
     lv_obj_add_style(ui->screen_1_list_1, &style_screen_1_list_1_main_scrollbar_default, LV_PART_SCROLLBAR|LV_STATE_DEFAULT);
 
     //Write style state: LV_STATE_DEFAULT for &style_screen_1_list_1_extra_btns_main_default
-    static lv_style_t style_screen_1_list_1_extra_btns_main_default;
+    // static lv_style_t style_screen_1_list_1_extra_btns_main_default;
     ui_init_style(&style_screen_1_list_1_extra_btns_main_default);
 
     lv_style_set_pad_top(&style_screen_1_list_1_extra_btns_main_default, 20);
@@ -185,18 +173,6 @@ void setup_scr_screen_1(lv_ui *ui)
     lv_style_set_bg_opa(&style_screen_1_list_1_extra_btns_main_default, 255);
     lv_style_set_bg_color(&style_screen_1_list_1_extra_btns_main_default, lv_color_hex(0x0f0f13));
     lv_style_set_bg_grad_dir(&style_screen_1_list_1_extra_btns_main_default, LV_GRAD_DIR_NONE);
-    lv_obj_add_style(ui->screen_1_list_1_item11, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_add_style(ui->screen_1_list_1_item10, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_add_style(ui->screen_1_list_1_item9, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_add_style(ui->screen_1_list_1_item8, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_add_style(ui->screen_1_list_1_item7, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_add_style(ui->screen_1_list_1_item6, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_add_style(ui->screen_1_list_1_item5, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_add_style(ui->screen_1_list_1_item4, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_add_style(ui->screen_1_list_1_item3, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_add_style(ui->screen_1_list_1_item2, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_add_style(ui->screen_1_list_1_item1, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_add_style(ui->screen_1_list_1_item0, &style_screen_1_list_1_extra_btns_main_default, LV_PART_MAIN|LV_STATE_DEFAULT);
 
     //Write style state: LV_STATE_DEFAULT for &style_screen_1_list_1_extra_texts_main_default
     static lv_style_t style_screen_1_list_1_extra_texts_main_default;
